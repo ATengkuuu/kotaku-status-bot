@@ -9,9 +9,9 @@ const {
 const axios = require("axios");
 const fs = require("fs");
 
-const BOT_TOKEN = "MTQ0NTY5OTI4NzEwMjAwMTIxMg.Gb2XGc.O4u0dCtSuC-cxJX2U3Rpi97OZ-JjkrI1KC4e4I";
-const CHANNEL_ID = "1445586504742207630";
-const SERVER_IP = "http://74.63.203.195"; // contoh: http://103.xxx.xxx:30120
+const BOT_TOKEN = "// Masukkan token bot Discord Anda di sini";
+const CHANNEL_ID = "// 1445586504742207630";
+const SERVER_IP = "// http://74.63.203.195"; // contoh: http://103.xxx.xxx:30120
 const LOGO_URL = "https://cdn.discordapp.com/attachments/1445254812894494872/1445689776970666165/kotakurp.png?ex=69314306&is=692ff186&hm=2216cf40938dde4930e26eafa493b9c5e9d029e42f2489e29ee92438b2ee692f.png";
 const BG_URL = "https://cdn.discordapp.com/attachments/1445254812894494872/1445689776970666165/kotakurp.png?ex=69314306&is=692ff186&hm=2216cf40938dde4930e26eafa493b9c5e9d029e42f2489e29ee92438b2ee692f.png";
 
