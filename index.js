@@ -9,7 +9,7 @@ const {
 const axios = require("axios");
 const fs = require("fs");
 
-const BOT_TOKEN = "// Masukkan token bot Discord Anda di sini";
+const BOT_TOKEN = "// Masukkan token bot Discord Anda di sini"; // Masukkan token bot Discord Anda di sini
 const CHANNEL_ID = "// 1445586504742207630";
 const SERVER_IP = "// http://74.63.203.195"; // contoh: http://103.xxx.xxx:30120
 const LOGO_URL = "https://cdn.discordapp.com/attachments/1445254812894494872/1445689776970666165/kotakurp.png?ex=69314306&is=692ff186&hm=2216cf40938dde4930e26eafa493b9c5e9d029e42f2489e29ee92438b2ee692f.png";
@@ -26,9 +26,8 @@ async function getUptime() {
     const uptimeMs = Date.now() - botStartTime;
     const hours = Math.floor(uptimeMs / (1000 * 60 * 60));
     const minutes = Math.floor((uptimeMs % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((uptimeMs % (1000 * 60)) / 1000);
     
-    return `${hours}h ${minutes}m ${seconds}s`;
+    return `${hours}h ${minutes}m`;
 }
 
 async function getStatus() {
@@ -149,18 +148,18 @@ async function buildEmbed() {
                 inline: false
             },
             {
-                name: "🕒 Server Uptime",
+                name: "🕒 **Server Uptime**",
                 value: `\`\`\`\n${await getUptime()}\n\`\`\``,
                 inline: true
             },
             {
                 name: "🎮 F8 CONNECT (MAIN)",
-                value: "```\nconnect minerva-portal.dopminer.cloud\n```",
+                value: "```\nconnect connect minerva.dopminer.cloud\n```",
                 inline: false
             },
             {
                 name: "🎮 F8 CONNECT (PROXY)",
-                value: "```\nconnect minerva.dopminer.cloud\n```",
+                value: "```\nconnect connect minerva-portal.dopminer.cloud\n```",
                 inline: false
             },
         )
@@ -170,6 +169,45 @@ async function buildEmbed() {
     return embed;
 }
 
+async function updateBotPresence() {
+    try {
+        const status = await getStatus();
+        const playerCount = status.players;
+        const maxPlayers = status.maxPlayers;
+        
+        let activityName;
+        if (status.maintenance) {
+            activityName = "🔧 Server Maintenance";
+        } else if (status.adminOnly) {
+            activityName = "🛡️ Admin Only Mode";
+        } else {
+            activityName = `${playerCount}/${maxPlayers} Players Online`;
+        }
+        
+        client.user.setPresence({
+            status: "online",
+            activities: [
+                {
+                    name: activityName,
+                    type: 3 // Watching
+                }
+            ]
+        });
+    } catch (error) {
+        console.log('Error updating bot presence:', error.message);
+        // Fallback status jika ada error
+        client.user.setPresence({
+            status: "online",
+            activities: [
+                {
+                    name: "KOTAKU Roleplay 2.0",
+                    type: 3
+                }
+            ]
+        });
+    }
+}
+
 async function update() {
     const channel = await client.channels.fetch(CHANNEL_ID);
 
@@ -177,9 +215,9 @@ async function update() {
 
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setLabel("CONNECT SERVER")
-            .setStyle(ButtonStyle.Secondary)
-            .setCustomId("connect_server")
+            .setLabel("🚀 CONNECT SERVER")
+            .setStyle(ButtonStyle.Link)
+            .setURL("https://cfx.re/join/minerva-dop")
     );
 
     const messages = await channel.messages.fetch({ limit: 1 });
@@ -190,24 +228,28 @@ async function update() {
         const msg = messages.first();
         await msg.edit({ embeds: [embed], components: [row] });
     }
+    
+    // Update bot presence setiap kali update embed
+    await updateBotPresence();
 }
 
-client.on("clientReady", () => {
+client.on("clientReady", async () => {
     console.log(`Bot online sebagai ${client.user.tag}`);
     botStartTime = Date.now(); // Reset start time ketika bot siap
+    
+    // Tampilkan info players saat bot start
+    try {
+        const status = await getStatus();
+        console.log(`👥 Players Online: ${status.players}/${status.maxPlayers}`);
+    } catch (error) {
+        console.log('Error getting player count:', error.message);
+    }
+    
+    // Initial update dan set interval
     update();
     setInterval(update, 60000);
 });
 
-client.on("interactionCreate", async (interaction) => {
-    if (!interaction.isButton()) return;
-    
-    if (interaction.customId === "connect_server") {
-        await interaction.reply({
-            content: "🎮 **Cara Connect ke Server:**\n\n**Tekan F8 di FiveM dan ketik:**\n```\nconnect 74.63.203.195:30120\n```\n\n**Atau klik link berikut:**\nfivem://connect/74.63.203.195:30120",
-            ephemeral: true
-        });
-    }
-});
+// Link button langsung ke CFX, tidak perlu interaction handler
 
 client.login(BOT_TOKEN);
