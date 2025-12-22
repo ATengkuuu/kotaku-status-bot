@@ -1,0 +1,23 @@
+# Environment Variables (PENTING!)
+.env
+
+# Node modules
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# IDE Files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Optional: File maintenance (jika tidak mau di-push)
+# maintenance.txt
+# admin-only.txt
