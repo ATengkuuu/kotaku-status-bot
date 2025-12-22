@@ -1,4 +1,4 @@
-require('dotenv').config(); // Load environment variables
+require('dotenv').config();
 
 const {
     Client,
@@ -10,29 +10,51 @@ const {
 } = require("discord.js");
 const axios = require("axios");
 const fs = require("fs");
-const DiscordLogger = require("./logger"); // Import logger
 
-// Environment variables - AMAN untuk di-push ke GitHub
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const CHANNEL_ID = process.env.CHANNEL_ID;
+const SERVER_IP = process.env.SERVER_IP;
 const CFX_SERVER_ID = process.env.CFX_SERVER_ID;
-const TX_ADMIN_IP = process.env.TX_ADMIN_IP;
-const TX_ADMIN_PORT = process.env.TX_ADMIN_PORT;
 const LOGO_URL = process.env.LOGO_URL;
 const BG_URL = process.env.BG_URL;
+const WEBHOOK_URL = process.env.WEBHOOK_URL;
 
 const client = new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages]
 });
 
-// Inisialisasi logger
-const logger = new DiscordLogger(process.env.WEBHOOK_URL);
-
 // Validasi environment variables
 if (!BOT_TOKEN || !CHANNEL_ID || !CFX_SERVER_ID) {
     console.error('❌ ERROR: Environment variables tidak lengkap!');
     console.error('Pastikan file .env sudah dibuat dengan benar.');
+    console.error('Yang diperlukan: BOT_TOKEN, CHANNEL_ID, CFX_SERVER_ID');
     process.exit(1);
+}
+
+// Fungsi kirim notifikasi ke webhook
+async function sendWebhook(title, description, color, fields = []) {
+    if (!WEBHOOK_URL) return; // Skip jika webhook tidak ada
+    
+    try {
+        const embed = {
+            title: title,
+            description: description,
+            color: color,
+            fields: fields,
+            timestamp: new Date().toISOString(),
+            footer: {
+                text: "Kotarist Roleplay Bot"
+            }
+        };
+        
+        await axios.post(WEBHOOK_URL, {
+            embeds: [embed]
+        });
+        
+        console.log(`[Webhook] Notifikasi terkirim: ${title}`);
+    } catch (error) {
+        console.error(`[Webhook Error] Gagal kirim notifikasi: ${error.message}`);
+    }
 }
 
 let botStartTime = Date.now();
@@ -54,44 +76,18 @@ function formatUptime(seconds) {
 // Fungsi terpisah untuk mengambil data server agar lebih rapi
 async function fetchServerData() {
     try {
-        const config = {
+        // Menggunakan CFX.re API untuk data realtime
+        const response = await axios.get(`https://servers-frontend.fivem.net/api/servers/single/${CFX_SERVER_ID}`, {
             timeout: 10000,
             headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) DiscordBot/1.0' }
-        };
-
-        let serverUptime = 0;
-        try {
-            const txResponse = await axios.get(`http://${TX_ADMIN_IP}:${TX_ADMIN_PORT}/status.json`, {
-                timeout: 5000,
-                headers: { 'User-Agent': 'Mozilla/5.0 DiscordBot/1.0' }
-            });
-            
-            if (txResponse.data && txResponse.data.status) {
-                const uptimeStr = txResponse.data.status.uptime || "0";
-                if (typeof uptimeStr === 'string' && uptimeStr.includes('h')) {
-                    const hours = parseInt(uptimeStr.match(/(\d+)h/)?.[1] || 0);
-                    const minutes = parseInt(uptimeStr.match(/(\d+)m/)?.[1] || 0);
-                    serverUptime = (hours * 3600) + (minutes * 60);
-                } else {
-                    serverUptime = parseInt(uptimeStr) || 0;
-                }
-                console.log(`[TX Admin] Uptime: ${serverUptime}s`);
-            }
-        } catch (txError) {
-            console.log(`[TX Admin] Tidak dapat mengambil data dari TX Admin: ${txError.message}`);
-        }
-
-        const response = await axios.get(`https://servers-frontend.fivem.net/api/servers/single/${CFX_SERVER_ID}`, config);
+        });
         
-        const serverInfo = response.data.Data;
-        const players = parseInt(serverInfo.clients) || 0;
-        const maxPlayers = parseInt(serverInfo.sv_maxclients) || 0;
+        const serverData = response.data.Data;
+        const players = parseInt(serverData.clients) || 0;
+        const maxPlayers = parseInt(serverData.sv_maxclients) || 32;
+        const serverUptime = parseInt(serverData.vars?.uptime) || 0;
         
-        if (serverUptime === 0) {
-            serverUptime = parseInt(serverInfo.vars?.uptime) || 0;
-        }
-        
-        console.log(`[CFX API] Successfully fetched: ${players}/${maxPlayers} players, Uptime: ${serverUptime}s`);
+        console.log(`[CFX API] Successfully fetched: ${players}/${maxPlayers} players, Uptime: ${formatUptime(serverUptime)}`);
         
         return {
             online: true,
@@ -101,13 +97,6 @@ async function fetchServerData() {
         };
     } catch (error) {
         console.log(`[Fetch Error] Gagal mengambil data server: ${error.message}`);
-        
-        // Log error ke Discord
-        await logger.error("❌ Gagal mengambil data server", {
-            error: error.message,
-            server: CFX_SERVER_ID,
-            timestamp: new Date().toLocaleString('id-ID')
-        });
         
         return {
             online: false,
@@ -242,12 +231,12 @@ async function buildEmbed() {
     embed.addFields(
         {
             name: "🎮 F8 CONNECT (MAIN)",
-            value: "```\nconnect connect minerva.dopminer.cloud\n```",
+            value: "```\nconnect kotaku.mayernetwork.net\n```",
             inline: false
         },
         {
             name: "🎮 F8 CONNECT (PROXY)",
-            value: "```\nconnect connect minerva-portal.dopminer.cloud\n```",
+            value: "```\nconnect kotaku-global.mayernetwork.net\n```",
             inline: false
         },
         {
@@ -304,7 +293,6 @@ async function update() {
         const channel = await client.channels.fetch(CHANNEL_ID);
         if (!channel) {
             console.log("Channel tidak ditemukan!");
-            await logger.error("Channel tidak ditemukan!", { channelId: CHANNEL_ID });
             return;
         }
 
@@ -314,29 +302,45 @@ async function update() {
         if (lastKnownStatus !== null) {
             if (lastKnownStatus.online !== status.online) {
                 if (status.online) {
-                    await logger.success("✅ Server kembali online!", {
-                        players: `${status.players}/${status.maxPlayers}`,
-                        uptime: formatUptime(status.uptime)
-                    });
+                    console.log("✅ Server kembali online!");
+                    await sendWebhook(
+                        "✅ Server Online",
+                        "Server Kotarist Roleplay kembali online!",
+                        0x00FF00, // Hijau
+                        [
+                            { name: "👥 Players", value: `${status.players}/${status.maxPlayers}`, inline: true },
+                            { name: "⏰ Uptime", value: formatUptime(status.uptime), inline: true }
+                        ]
+                    );
                 } else {
-                    await logger.error("🔴 Server offline terdeteksi!", {
-                        lastPlayers: `${lastKnownStatus.players}/${lastKnownStatus.maxPlayers}`,
-                        reason: "Server tidak merespon API"
-                    });
+                    console.log("🔴 Server offline terdeteksi!");
+                    await sendWebhook(
+                        "🔴 Server Offline",
+                        "Server Kotarist Roleplay sedang offline atau tidak dapat diakses.",
+                        0xFF0000 // Merah
+                    );
                 }
             }
             
             if (!lastKnownStatus.maintenance && status.maintenance) {
-                await logger.warning("🔧 Server masuk mode maintenance", {
-                    reason: status.maintenanceReason
-                });
+                console.log("🔧 Server masuk mode maintenance");
+                await sendWebhook(
+                    "🔧 Maintenance Mode",
+                    `Server masuk mode maintenance.\n\n**Alasan:** ${status.maintenanceReason}`,
+                    0xFFA500 // Orange
+                );
             }
             
             if (!lastKnownStatus.adminOnly && status.adminOnly) {
-                await logger.warning("🛡️ Server masuk mode Admin Only", {
-                    reason: status.adminReason,
-                    players: `${status.players}/${status.maxPlayers}`
-                });
+                console.log("🛡️ Server masuk mode Admin Only");
+                await sendWebhook(
+                    "🛡️ Admin Only Mode",
+                    `Server masuk mode Admin Only.\n\n**Alasan:** ${status.adminReason}`,
+                    0xFFFF00, // Kuning
+                    [
+                        { name: "👥 Players", value: `${status.players}/${status.maxPlayers}`, inline: true }
+                    ]
+                );
             }
         }
         
@@ -364,81 +368,96 @@ async function update() {
         await updateBotPresence();
     } catch (error) {
         console.log("Error pada fungsi update utama:", error.message);
-        await logger.error("⚠️ Error pada fungsi update", {
-            error: error.message,
-            stack: error.stack.substring(0, 500)
-        });
     }
 }
 
 client.on("clientReady", async () => {
     console.log(`Bot online sebagai ${client.user.tag}`);
     botStartTime = Date.now();
+    console.log("🚀 Bot berhasil online!");
     
-    // Log bot startup
-    await logger.success("🚀 Bot berhasil online!", {
-        tag: client.user.tag,
-        guilds: client.guilds.cache.size,
-        startTime: new Date().toLocaleString('id-ID')
-    });
+    // Kirim webhook notifikasi bot startup
+    const initialStatus = await getStatus();
+    if (initialStatus.online) {
+        await sendWebhook(
+            "🚀 Bot Online - Server Status",
+            `Bot berhasil startup!\n\n**Status Server:** ${initialStatus.maintenance ? '🔧 Maintenance' : (initialStatus.adminOnly ? '🛡️ Admin Only' : '🟢 Public Online')}`,
+            0x00BFFF, // Biru
+            [
+                { name: "👥 Players", value: `${initialStatus.players}/${initialStatus.maxPlayers}`, inline: true },
+                { name: "⏰ Uptime", value: formatUptime(initialStatus.uptime), inline: true }
+            ]
+        );
+    } else {
+        await sendWebhook(
+            "🚀 Bot Online - Server Offline",
+            "Bot berhasil startup tapi server sedang offline.",
+            0xFF0000 // Merah
+        );
+    }
     
     update();
     setInterval(update, 60000);
 });
 
 // Log error yang tidak tertangani
-process.on('unhandledRejection', async (error) => {
+process.on('unhandledRejection', (error) => {
     console.error('Unhandled Rejection:', error);
-    await logger.error("💥 Unhandled Rejection Error", {
-        error: error.message,
-        stack: error.stack?.substring(0, 500)
-    });
 });
 
-process.on('uncaughtException', async (error) => {
+process.on('uncaughtException', (error) => {
     console.error('Uncaught Exception:', error);
-    await logger.error("💥 Uncaught Exception Error", {
-        error: error.message,
-        stack: error.stack?.substring(0, 500)
-    });
     process.exit(1);
 });
 
 // Log saat bot disconnect
 client.on('disconnect', async () => {
     console.log('Bot disconnected from Discord');
-    await logger.warning("⚠️ Bot terputus dari Discord", {
-        timestamp: new Date().toLocaleString('id-ID'),
-        uptime: formatUptime((Date.now() - botStartTime) / 1000)
-    });
+    const botUptime = formatUptime((Date.now() - botStartTime) / 1000);
+    await sendWebhook(
+        "⚠️ Bot Terputus dari Discord",
+        "Bot terputus dari Discord.",
+        0xFFA500,
+        [
+            { name: "⏰ Bot Uptime", value: botUptime, inline: true }
+        ]
+    );
 });
 
 // Log saat bot error
-client.on('error', async (error) => {
+client.on('error', (error) => {
     console.error('Discord client error:', error);
-    await logger.error("❌ Discord Client Error", {
-        error: error.message,
-        stack: error.stack?.substring(0, 500)
-    });
 });
 
-// Graceful shutdown - Log sebelum bot mati
+// Graceful shutdown
 process.on('SIGINT', async () => {
     console.log('Received SIGINT, shutting down gracefully...');
-    await logger.warning("🛑 Bot dimatikan secara manual (SIGINT)", {
-        uptime: formatUptime((Date.now() - botStartTime) / 1000),
-        timestamp: new Date().toLocaleString('id-ID')
-    });
+    const botUptime = formatUptime((Date.now() - botStartTime) / 1000);
+    await sendWebhook(
+        "🛑 Bot Offline (Manual Shutdown)",
+        "Bot dimatikan secara manual.",
+        0xFF0000,
+        [
+            { name: "⏰ Bot Berjalan Selama", value: botUptime, inline: true },
+            { name: "📅 Waktu Shutdown", value: new Date().toLocaleString('id-ID'), inline: true }
+        ]
+    );
     await client.destroy();
     process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
     console.log('Received SIGTERM, shutting down gracefully...');
-    await logger.warning("🛑 Bot dimatikan secara manual (SIGTERM)", {
-        uptime: formatUptime((Date.now() - botStartTime) / 1000),
-        timestamp: new Date().toLocaleString('id-ID')
-    });
+    const botUptime = formatUptime((Date.now() - botStartTime) / 1000);
+    await sendWebhook(
+        "🛑 Bot Offline (System Shutdown)",
+        "Bot dimatikan oleh sistem.",
+        0xFF0000,
+        [
+            { name: "⏰ Bot Berjalan Selama", value: botUptime, inline: true },
+            { name: "📅 Waktu Shutdown", value: new Date().toLocaleString('id-ID'), inline: true }
+        ]
+    );
     await client.destroy();
     process.exit(0);
 });

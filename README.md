@@ -1,4 +1,4 @@
-# Kotaku Status Bot
+# Kotarist Status Bot
 
 Discord bot untuk monitoring status server FiveM Kotarist Roleplay.
 
